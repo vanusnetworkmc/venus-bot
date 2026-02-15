@@ -1,32 +1,46 @@
-const express = require("express");
-const fetch = require("node-fetch");
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
+
 const app = express();
+app.use(cors());
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
+// Porta al login Discord
 app.get("/auth/discord", (req, res) => {
-  const url = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
+  const url =
+    `https://discord.com/api/oauth2/authorize` +
+    `?client_id=${CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&response_type=code` +
+    `&scope=identify`;
+
   res.redirect(url);
 });
 
+// Callback dopo il login
 app.get("/auth/callback", async (req, res) => {
   const code = req.query.code;
 
-  const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      grant_type: "authorization_code",
-      code: code,
-      redirect_uri: REDIRECT_URI
-    })
-  });
+  const params = new URLSearchParams();
+  params.append("client_id", CLIENT_ID);
+  params.append("client_secret", CLIENT_SECRET);
+  params.append("grant_type", "authorization_code");
+  params.append("code", code);
+  params.append("redirect_uri", REDIRECT_URI);
+
+  const tokenRes = await fetch(
+    "https://discord.com/api/oauth2/token",
+    {
+      method: "POST",
+      body: params,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    }
+  );
 
   const tokenData = await tokenRes.json();
 
@@ -38,7 +52,8 @@ app.get("/auth/callback", async (req, res) => {
 
   const user = await userRes.json();
 
-  res.redirect(`${process.env.SITE_URL}?discordId=${user.id}`);
+  // Rimanda l’utente al sito con i dati
+  res.redirect(`${FRONTEND_URL}?user=${encodeURIComponent(JSON.stringify(user))}`);
 });
 
-app.listen(3000, () => console.log("Server avviato"));
+app.listen(3000, () => console.log("Server running"));
