@@ -10,6 +10,9 @@ const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL;
 
+// Porta dinamica per Railway
+const PORT = process.env.PORT || 3000;
+
 // Porta al login Discord
 app.get("/auth/discord", (req, res) => {
   const url =
@@ -26,6 +29,8 @@ app.get("/auth/discord", (req, res) => {
 app.get("/auth/callback", async (req, res) => {
   const code = req.query.code;
 
+  if (!code) return res.status(400).send("No code provided");
+
   const params = new URLSearchParams();
   params.append("client_id", CLIENT_ID);
   params.append("client_secret", CLIENT_SECRET);
@@ -33,26 +38,31 @@ app.get("/auth/callback", async (req, res) => {
   params.append("code", code);
   params.append("redirect_uri", REDIRECT_URI);
 
-  const tokenRes = await fetch(
-    "https://discord.com/api/oauth2/token",
-    {
-      method: "POST",
-      body: params,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
-    }
-  );
+  try {
+    const tokenRes = await fetch(
+      "https://discord.com/api/oauth2/token",
+      {
+        method: "POST",
+        body: params,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      }
+    );
 
-  const tokenData = await tokenRes.json();
+    const tokenData = await tokenRes.json();
 
-  const userRes = await fetch("https://discord.com/api/users/@me", {
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`
-    }
-  });
+    const userRes = await fetch("https://discord.com/api/users/@me", {
+      headers: {
+        Authorization: `Bearer ${tokenData.access_token}`
+      }
+    });
 
-  const user = await userRes.json();
+    const user = await userRes.json();
 
-  res.redirect(`${FRONTEND_URL}?user=${encodeURIComponent(JSON.stringify(user))}`);
+    res.redirect(`${FRONTEND_URL}?user=${encodeURIComponent(JSON.stringify(user))}`);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error during Discord OAuth");
+  }
 });
 
-app.listen(3000, () => console.log("Server running"));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
