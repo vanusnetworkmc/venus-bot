@@ -1,6 +1,6 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+const express = require("express");
+const fetch = require("node-fetch");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
@@ -52,7 +52,6 @@ app.get("/auth/callback", async (req, res) => {
 
   const user = await userRes.json();
 
-  // Rimanda l’utente al sito con i dati
   res.redirect(`${FRONTEND_URL}?user=${encodeURIComponent(JSON.stringify(user))}`);
 });
 
