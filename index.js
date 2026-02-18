@@ -1,19 +1,25 @@
+require("dotenv").config();
 const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
+
 app.use(cors());
+app.use(express.json());
 
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI;
-const FRONTEND_URL = process.env.FRONTEND_URL;
+const {
+  CLIENT_ID,
+  CLIENT_SECRET,
+  REDIRECT_URI,
+  FRONTEND_URL,
+  PORT = 3000
+} = process.env;
 
-// Porta dinamica per Railway
-const PORT = process.env.PORT || 3000;
+/* ============================
+   LOGIN DISCORD
+============================ */
 
-// Porta al login Discord
 app.get("/auth/discord", (req, res) => {
   const url =
     `https://discord.com/api/oauth2/authorize` +
@@ -25,44 +31,78 @@ app.get("/auth/discord", (req, res) => {
   res.redirect(url);
 });
 
-// Callback dopo il login
+/* ============================
+   CALLBACK DISCORD
+============================ */
+
 app.get("/auth/callback", async (req, res) => {
   const code = req.query.code;
 
-  if (!code) return res.status(400).send("No code provided");
-
-  const params = new URLSearchParams();
-  params.append("client_id", CLIENT_ID);
-  params.append("client_secret", CLIENT_SECRET);
-  params.append("grant_type", "authorization_code");
-  params.append("code", code);
-  params.append("redirect_uri", REDIRECT_URI);
+  if (!code) {
+    return res.status(400).json({ error: "No code provided" });
+  }
 
   try {
-    const tokenRes = await fetch(
-      "https://discord.com/api/oauth2/token",
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      grant_type: "authorization_code",
+      code: code,
+      redirect_uri: REDIRECT_URI,
+    });
+
+    // Scambio code -> access token
+    const tokenResponse = await fetch(
+      "https://discord.com/api/v10/oauth2/token",
       {
         method: "POST",
         body: params,
-        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
       }
     );
 
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenResponse.json();
 
-    const userRes = await fetch("https://discord.com/api/users/@me", {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`
+    if (!tokenResponse.ok) {
+      console.error("Token error:", tokenData);
+      return res.status(400).json(tokenData);
+    }
+
+    // Prendo i dati utente
+    const userResponse = await fetch(
+      "https://discord.com/api/v10/users/@me",
+      {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
       }
-    });
+    );
 
-    const user = await userRes.json();
+    const userData = await userResponse.json();
 
-    res.redirect(`${FRONTEND_URL}?user=${encodeURIComponent(JSON.stringify(user))}`);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error during Discord OAuth");
+    if (!userResponse.ok) {
+      console.error("User fetch error:", userData);
+      return res.status(400).json(userData);
+    }
+
+    // Redirect al frontend con i dati utente
+    res.redirect(
+      `${FRONTEND_URL}?user=${encodeURIComponent(
+        JSON.stringify(userData)
+      )}`
+    );
+  } catch (error) {
+    console.error("OAuth error:", error);
+    res.status(500).json({ error: "OAuth failed" });
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+/* ============================
+   START SERVER
+============================ */
+
+app.listen(PORT, () =>
+  console.log(`✅ Server running on port ${PORT}`)
+);
